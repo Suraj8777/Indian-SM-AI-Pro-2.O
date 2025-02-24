@@ -170,36 +170,36 @@
         }
 
         async function fetchAIResponse(query) {
-            try {
-                const response = await fetch('https://api.openrouter.ai/api/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer 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`, // Replace with your API key
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        model: 'meta-llama/llama-3.1-8b-instruct:free',
-                        messages: [{
-                            role: 'system',
-                            content: `Respond as JARVIS from Iron Man. Be concise and technical. Current language: ${selectedLanguage}`
-                        }, {
-                            role: 'user',
-                            content: query
-                        }]
-                    })
-                });
+    try {
+        const response = await fetch('https://api.openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer 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`, // Your API key
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'meta-llama/llama-3.1-8b-instruct:free',
+                messages: [{
+                    role: 'system',
+                    content: `Respond as JARVIS from Iron Man. Be concise and technical. Current language: ${selectedLanguage}`
+                }, {
+                    role: 'user',
+                    content: query
+                }]
+            })
+        });
 
-                if (!response.ok) {
-                    throw new Error(`API Error: ${response.status}`);
-                }
-
-                const data = await response.json();
-                return data.choices[0].message.content;
-            } catch (error) {
-                console.error('AI Fetch Error:', error);
-                return 'I apologize, sir. My neural network is currently unavailable. Please try again later.';
-            }
+        if (!response.ok) {
+            throw new Error(`API Error: ${response.status}`);
         }
+
+        const data = await response.json();
+        return data.choices[0].message.content;
+    } catch (error) {
+        console.error('AI Fetch Error:', error);
+        return 'I apologize, sir. My neural network is currently unavailable. Please try again later.';
+    }
+}
 
         function startListening() {
             recognition.lang = selectedLanguage;
