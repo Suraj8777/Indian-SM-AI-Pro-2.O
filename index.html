@@ -2,262 +2,417 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>JARVIS AI Assistant</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jarvis AI Assistant</title>
     <style>
-        /* Add your CSS styles here */
+        body {
+            margin: 0;
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            background: #0a0a0a;
+            color: #00ffff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+        .jarvis-container {
+            max-width: 600px;
+            width: 100%;
+            margin: 0 auto;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #00ffff;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            position: relative;
+            z-index: 1;
+        }
+        #status {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            text-align: center;
+            color: #ffffff;
+        }
+        .output {
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        button, input[type="file"], input[type="text"] {
+            background: #00ffff;
+            color: #000;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: all 0.3s;
+            flex: 1;
+            min-width: 100px;
+        }
+        input[type="text"] {
+            background: rgba(255, 255, 255, 0.1);
+            color: #00ffff;
+        }
+        button:hover, input[type="file"]:hover, input[type="text"]:hover {
+            background: #00cccc;
+            transform: scale(1.05);
+        }
+        button:active, input[type="file"]:active, input[type="text"]:active {
+            background: #009999;
+        }
+        #session-list {
+            margin-top: 20px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .session-item {
+            padding: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            margin-bottom: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .session-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        @media (max-width: 480px) {
+            .jarvis-container {
+                padding: 10px;
+            }
+            .controls {
+                flex-direction: column;
+            }
+            button, input[type="file"], input[type="text"] {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
+    <canvas id="canvas"></canvas>
     <div class="jarvis-container">
-        <select id="language-select">
-            <option value="en-US">English (US)</option>
-            <option value="es-ES">Spanish (Spain)</option>
-            <option value="fr-FR">French (France)</option>
-            <option value="de-DE">German (Germany)</option>
-            <option value="bn-IN">Bengali (India)</option>
-            <option value="hi-IN">Hindi (India)</option>
-        </select>
-        <div id="status">SYSTEM READY</div>
+        <div id="status">Ready</div>
         <div class="output" id="output">JARVIS: Systems online. How may I assist you, sir?</div>
-        <button onclick="startListening()">Activate Voice Interface</button>
+        <div class="controls">
+            <button onclick="startListening()">Speak to JARVIS</button>
+            <button onclick="startChat()">Start Chat Session</button>
+            <input type="file" id="fileInput" accept=".txt,.pdf" onchange="processFile()">
+            <input type="text" id="textInput" placeholder="Type your message here..." onkeydown="if(event.key === 'Enter') sendText()">
+            <button onclick="sendText()">Send</button>
+        </div>
+        <div id="session-list"></div>
     </div>
-    <canvas id="background-canvas"></canvas>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
     <script>
-        // Application Logic
-        const output = document.getElementById('output');
-        const statusDiv = document.getElementById('status');
-        const languageSelect = document.getElementById('language-select');
-        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-        
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        let appState = 'idle';
-        let selectedLanguage = languageSelect.value;
-        let lastResponse = '';
+        // Particle Background Animation
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const particlesArray = [];
+        const numberOfParticles = 100;
 
-        // Language Selection
-        languageSelect.addEventListener('change', () => {
-            selectedLanguage = languageSelect.value;
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 5 + 1;
+                this.speedX = Math.random() * 1 - 0.5;
+                this.speedY = Math.random() * 1 - 0.5;
+                this.life = Math.random() * 100 + 50;
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.life -= 1;
+                if (this.life <= 0) {
+                    this.x = Math.random() * canvas.width;
+                    this.y = Math.random() * canvas.height;
+                    this.life = Math.random() * 100 + 50;
+                }
+            }
+            draw() {
+                ctx.fillStyle = `rgba(0, 255, 255, ${this.life / 150})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            for (let i = 0; i < numberOfParticles; i++) {
+                particlesArray.push(new Particle());
+            }
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < particlesArray.length; i++) {
+                particlesArray[i].update();
+                particlesArray[i].draw();
+                for (let j = i; j < particlesArray.length; j++) {
+                    const dx = particlesArray[i].x - particlesArray[j].x;
+                    const dy = particlesArray[i].y - particlesArray[j].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < 100) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = `rgba(0, 255, 255, ${1 - distance / 100})`;
+                        ctx.lineWidth = 1;
+                        ctx.moveTo(particlesArray[i].x, particlesArray[i].y);
+                        ctx.lineTo(particlesArray[j].x, particlesArray[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(animateParticles);
+        }
+
+        initParticles();
+        animateParticles();
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
         });
 
-        // Command Processing
-        const commandSet = [
-            { pattern: /time|current time/i, response: () => `The time is ${new Date().toLocaleTimeString()}` },
-            { pattern: /date|today's date/i, response: () => `Today is ${new Date().toLocaleDateString()}` },
-            { pattern: /who are you/i, response: () => 'I am JARVIS, your artificial intelligence assistant. At your service, sir.' },
-            { pattern: /calculate (.+)/i, response: (match) => {
+        // JARVIS Logic
+        const output = document.getElementById('output');
+        const statusDiv = document.getElementById('status');
+        const sessionList = document.getElementById('session-list');
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        let lastResponse = '';
+        let sessions = [];
+        let currentSession = null;
+
+        const apiKeys = [
+            'a5caf05ac5bff33416c4fafb3d168ae1',
+            'ccc6aaee923a4e57822939126c916aab',
+            'a5caf05ac5bff33416c4fafb3d168ae1',
+            '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',
+            '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',
+            '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',
+            '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',
+            'h0T9v4DpBkFktA8PxhgcBxC3u6sd8JiynbEjFBMP'
+        ];
+        let currentKeyIndex = 0;
+
+        const predefinedCommands = [
+            { pattern: /time/i, handler: (match) => `The current time is ${new Date().toLocaleTimeString()}` },
+            { pattern: /who are you/i, handler: (match) => 'I am JARVIS, your personal AI assistant, inspired by Mr. Stark\'s creation.' },
+            { pattern: /calculate (.+)/i, handler: (match) => {
                 try {
-                    return `Calculation result: ${eval(match[1])}`;
+                    const result = eval(match[1]);
+                    return `The result is ${result}, sir.`;
                 } catch {
-                    return 'Unable to process that calculation';
+                    return 'I apologize, sir, but I couldn\'t calculate that.';
                 }
             }},
-            { pattern: /search (.+)/i, response: (match) => {
-                window.open(`https://google.com/search?q=${encodeURIComponent(match[1])}`);
-                return `Searching for ${match[1]}...`;
-            }}
+            { pattern: /open (.+)/i, handler: (match) => {
+                const sites = { 'google': 'https://www.google.com', 'youtube': 'https://www.youtube.com', 'wikipedia': 'https://www.wikipedia.org' };
+                const site = match[1].toLowerCase();
+                if (sites[site]) {
+                    window.open(sites[site], '_blank');
+                    return `Opening ${site}, sir.`;
+                } else {
+                    return `I'm sorry, sir, but I don't have access to open ${site}.`;
+                }
+            }},
+            { pattern: /repeat/i, handler: (match) => lastResponse || 'I have no previous response to repeat, sir.' },
+            { pattern: /help/i, handler: (match) => 'I can assist with commands like "time", "who are you", "calculate [expression]", "open [site]", start a chat session, upload documents, or type messages.' }
         ];
 
-        // Speech Recognition Handlers
-        recognition.onresult = async (event) => {
-            const transcript = event.results[0][0].transcript;
-            output.innerHTML += `<div class="user-query">USER: ${transcript}</div>`;
-            setStatus('PROCESSING QUERY');
-            appState = 'processing';
+        async function fetchWithFallback(transcript, isDeep = false) {
+            let response;
+            for (let i = 0; i < apiKeys.length; i++) {
+                try {
+                    const apiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKeys[currentKeyIndex]}`
+                        },
+                        body: JSON.stringify({
+                            model: 'meta-llama/llama-3.1-8b-instruct:free',
+                            messages: [
+                                { role: 'system', content: `You are JARVIS, an AI assistant inspired by the Marvel character. Respond in a formal, polite manner, addressing the user as "sir". ${isDeep ? 'Perform deep analysis and reasoning for complex queries.' : ''}` },
+                                { role: 'user', content: transcript }
+                            ]
+                        })
+                    });
 
-            let response = processCommand(transcript);
-            if (!response) {
-                response = await fetchAIResponse(transcript);
+                    if (apiResponse.ok) {
+                        const data = await apiResponse.json();
+                        response = data.choices[0].message.content;
+                        break;
+                    } else {
+                        currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
+                    }
+                } catch (error) {
+                    console.error(error);
+                    currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
+                }
             }
+            if (!response && isDeep) {
+                response = `After deep analysis, sir, I conclude: ${transcript.split(' ').reverse().join(' ')} (placeholder for advanced reasoning).`;
+            }
+            return response || 'I\'m sorry, sir. All API keys failed to process your request.';
+        }
 
-            output.innerHTML += `<div class="jarvis-response">JARVIS: ${response}</div>`;
+        recognition.onresult = async function(event) {
+            const transcript = event.results[0][0].transcript.trim();
+            output.innerHTML += `<br>YOU: ${transcript}`;
+            setStatus('Processing...');
+            let response = await processInput(transcript);
+            output.innerHTML += `<br>JARVIS: ${response}`;
             output.scrollTop = output.scrollHeight;
             lastResponse = response;
             speak(response);
-            setStatus('SYSTEM READY');
-            appState = 'idle';
+            setStatus('Ready');
         };
 
-        recognition.onerror = (event) => {
-            output.innerHTML += `<div class="error">SYSTEM ERROR: ${event.error}</div>`;
-            setStatus('SYSTEM READY');
-            appState = 'idle';
-        };
-
-        // Helper Functions
-        function processCommand(transcript) {
-            for (const cmd of commandSet) {
-                const match = transcript.match(cmd.pattern);
-                if (match) return cmd.response(match);
-            }
-            return null;
-        }
-
-        async function fetchAIResponse(query) {
-            try {
-                const response = await fetch('https://api.openrouter.ai/api/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer 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`, // Your API key
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        model: 'meta-llama/llama-3.1-8b-instruct:free',
-                        messages: [{
-                            role: 'system',
-                            content: `Respond as JARVIS from Iron Man. Be concise and technical. Current language: ${selectedLanguage}`
-                        }, {
-                            role: 'user',
-                            content: query
-                        }]
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`API Error: ${response.status}`);
+        async function processInput(transcript) {
+            let response;
+            for (const command of predefinedCommands) {
+                const match = command.pattern.exec(transcript);
+                if (match) {
+                    response = command.handler(match);
+                    break;
                 }
+            }
+            if (!response) {
+                const isDeep = transcript.toLowerCase().includes('think') || transcript.toLowerCase().includes('analyze');
+                response = await fetchWithFallback(transcript, isDeep);
+                if (currentSession) {
+                    currentSession.log += `<br>YOU: ${transcript}<br>JARVIS: ${response}`;
+                    updateSessionList();
+                }
+            }
+            return response;
+        }
 
-                const data = await response.json();
-                return data.choices[0].message.content;
+        function startChat() {
+            try {
+                const sessionId = sessions.length + 1;
+                currentSession = { id: sessionId, log: 'JARVIS: Chat session initiated, sir. How may I assist you?' };
+                sessions.push(currentSession);
+                output.innerHTML = currentSession.log;
+                updateSessionList();
+                setStatus('Chat Active');
+                speak('Chat session initiated, sir. How may I assist you?');
             } catch (error) {
-                console.error('AI Fetch Error:', error);
-                return 'I apologize, sir. My neural network is currently unavailable. Please try again later.';
+                console.error('Error starting chat:', error);
+                output.innerHTML += `<br>JARVIS: Apologies, sir. An error occurred while starting the chat session.`;
+                setStatus('Ready');
             }
         }
+
+        async function sendText() {
+            const textInput = document.getElementById('textInput');
+            const transcript = textInput.value.trim();
+            if (!transcript) return;
+            output.innerHTML += `<br>YOU: ${transcript}`;
+            setStatus('Processing...');
+            const response = await processInput(transcript);
+            output.innerHTML += `<br>JARVIS: ${response}`;
+            output.scrollTop = output.scrollHeight;
+            lastResponse = response;
+            speak(response);
+            setStatus(currentSession ? 'Chat Active' : 'Ready');
+            textInput.value = ''; // Clear input after sending
+        }
+
+        function updateSessionList() {
+            sessionList.innerHTML = '';
+            sessions.forEach(session => {
+                const div = document.createElement('div');
+                div.className = 'session-item';
+                div.textContent = `Session ${session.id} ${currentSession && currentSession.id === session.id ? '(Active)' : ''}`;
+                div.onclick = () => {
+                    currentSession = session;
+                    output.innerHTML = session.log || `JARVIS: Session ${session.id} loaded, sir.`;
+                    setStatus(currentSession ? 'Chat Active' : 'Ready');
+                    speak(`Session ${session.id} loaded, sir.`);
+                };
+                sessionList.appendChild(div);
+            });
+        }
+
+        async function processFile() {
+            const file = document.getElementById('fileInput').files[0];
+            if (!file) return;
+            setStatus('Processing document...');
+            let text;
+            if (file.type === 'application/pdf') {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+                text = '';
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const content = await page.getTextContent();
+                    text += content.items.map(item => item.str).join(' ') + ' ';
+                }
+            } else {
+                text = await file.text();
+            }
+            output.innerHTML += `<br>JARVIS: Analyzing document "${file.name}", sir...`;
+            const response = await fetchWithFallback(`Analyze this document: ${text.slice(0, 500)}`, true);
+            output.innerHTML += `<br>JARVIS: ${response}`;
+            if (currentSession) {
+                currentSession.log += `<br>JARVIS: Analyzed "${file.name}"<br>JARVIS: ${response}`;
+                updateSessionList();
+            }
+            speak(response);
+            setStatus('Ready');
+        }
+
+        recognition.onerror = function(event) {
+            let message;
+            switch (event.error) {
+                case 'no-speech': message = 'No speech was detected, sir.'; break;
+                case 'audio-capture': message = 'Audio capture failed, sir. Please check your microphone.'; break;
+                case 'not-allowed': message = 'Permission to use the microphone was denied, sir.'; break;
+                default: message = 'An error occurred with speech recognition, sir.';
+            }
+            output.innerHTML += `<br>JARVIS: ${message}`;
+            setStatus('Ready');
+        };
 
         function startListening() {
-            recognition.lang = selectedLanguage;
-            setStatus('LISTENING');
-            appState = 'listening';
+            setStatus('Listening...');
             recognition.start();
         }
 
         function setStatus(text) {
             statusDiv.textContent = text;
-            statusDiv.style.textShadow = `0 0 15px ${appState === 'listening' ? '#ff0000' : '#00ffff'}`;
         }
 
         function speak(text) {
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.voice = speechSynthesis.getVoices()
-                .find(voice => voice.lang === selectedLanguage) || speechSynthesis.getVoices()[0];
-            speechSynthesis.speak(utterance);
+            utterance.voice = speechSynthesis.getVoices().find(voice => voice.lang === 'en-GB') || null;
+            window.speechSynthesis.speak(utterance);
         }
 
-        // Enhanced Background Animation
-        const canvas = document.getElementById('background-canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-
-        class Particle {
-            constructor() {
-                this.reset(true);
-                this.hue = Math.random() * 360;
-                this.alpha = 0.1 + Math.random() * 0.3;
-                this.trail = [];
-                this.maxTrail = 10;
-            }
-
-            reset(init) {
-                this.x = init ? Math.random() * canvas.width : -100;
-                this.y = Math.random() * canvas.height;
-                this.vx = (Math.random() - 0.5) * (appState === 'listening' ? 5 : 2);
-                this.vy = (Math.random() - 0.5) * (appState === 'listening' ? 5 : 2);
-                this.baseSize = 2 + Math.random() * 3;
-            }
-
-            update() {
-                this.vx *= 0.99;
-                this.vy *= 0.99;
-                
-                const speed = appState === 'listening' ? 1.5 : appState === 'processing' ? 0.6 : 1;
-                this.x += this.vx * speed;
-                this.y += this.vy * speed;
-
-                this.trail.push({x: this.x, y: this.y});
-                if (this.trail.length > this.maxTrail) this.trail.shift();
-
-                if (this.x < -100 || this.x > canvas.width + 100 || 
-                    this.y < -100 || this.y > canvas.height + 100) this.reset(false);
-            }
-
-            draw() {
-                this.trail.forEach((pos, i) => {
-                    const ratio = i/this.trail.length;
-                    ctx.beginPath();
-                    ctx.arc(pos.x, pos.y, this.baseSize * ratio, 0, Math.PI * 2);
-                    ctx.fillStyle = `hsla(${this.hue}, 100%, 50%, ${this.alpha * ratio})`;
-                    ctx.fill();
-                });
-
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.baseSize, 0, Math.PI * 2);
-                ctx.fillStyle = `hsla(${this.hue}, 100%, 50%, ${this.alpha})`;
-                ctx.fill();
-            }
-        }
-
-        const particles = Array.from({length: 200}, () => new Particle());
-
-        function animate() {
-            ctx.fillStyle = 'rgba(10, 10, 10, 0.05)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            particles.forEach(particle => {
-                particle.update();
-                particle.draw();
-            });
-
-            drawConnections();
-            requestAnimationFrame(animate);
-        }
-
-        function drawConnections() {
-            particles.forEach((a, i) => {
-                particles.slice(i).forEach(b => {
-                    const dx = a.x - b.x;
-                    const dy = a.y - b.y;
-                    const dist = Math.sqrt(dx*dx + dy*dy);
-
-                    if (dist < 150) {
-                        ctx.beginPath();
-                        ctx.moveTo(a.x, a.y);
-                        ctx.lineTo(b.x, b.y);
-                        ctx.strokeStyle = `hsla(${(a.hue + b.hue)/2}, 70%, 50%, ${0.3 - dist/500})`;
-                        ctx.lineWidth = 1.5 - dist/100;
-                        ctx.stroke();
-                    }
-                });
-            });
-        }
-
-        animate();
-
-        window.addEventListener('resize', () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            particles.forEach(p => p.reset(true));
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            if (appState === 'idle') {
-                particles.forEach(p => {
-                    const dx = e.x - p.x;
-                    const dy = e.y - p.y;
-                    const dist = Math.sqrt(dx*dx + dy*dy);
-                    if (dist < 150) {
-                        p.vx += dx * 0.0003;
-                        p.vy += dy * 0.0003;
-                    }
-                });
-            }
-        });
-
-        // Initialize voices
-        window.speechSynthesis.onvoiceschanged = () => {
-            speak('All systems operational. Awaiting your command.');
+        window.speechSynthesis.onvoiceschanged = function() {
+            speak('Systems online. How may I assist you, sir?');
         };
     </script>
 </body>
